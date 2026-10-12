@@ -1,0 +1,11 @@
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+.idea/
+.vscode/launch.json
+# Nunca subir llaves ni archivos con credenciales
+env.json
+.env
