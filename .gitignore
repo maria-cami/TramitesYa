@@ -9,3 +9,5 @@ build/
 # Nunca subir llaves ni archivos con credenciales
 env.json
 .env
+
+
