@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
@@ -15,6 +16,7 @@ import '../maps/maps_providers.dart';
 
 /// HU09–HU16 — Creación de una solicitud en 4 pasos:
 /// 1) tipo de trámite  2) detalle  3) direcciones  4) resumen y pago.
+/// La opción "Otro" deja escribir el servicio y el valor (mínimo $5.000).
 class NewOrderScreen extends ConsumerStatefulWidget {
   const NewOrderScreen({super.key, this.tramiteId});
 
@@ -28,9 +30,16 @@ class NewOrderScreen extends ConsumerStatefulWidget {
 class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
   static const _titulos = ['Tipo de trámite', 'Cuéntanos los detalles', 'Direcciones', 'Resumen'];
 
+  /// Límites del valor en "Otro" (deben coincidir con crear_pedido en Supabase).
+  static const _minOtro = 5000;
+  static const _maxOtro = 10000000;
+
+  final _formOtro = GlobalKey<FormState>();
   final _formDetalle = GlobalKey<FormState>();
   final _formDirecciones = GlobalKey<FormState>();
 
+  final _tituloOtro = TextEditingController();
+  final _valorOtro = TextEditingController();
   final _descripcion = TextEditingController();
   final _notas = TextEditingController();
   final _recogida = TextEditingController();
@@ -51,12 +60,37 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
   bool _preseleccionado = false;
   bool _enviando = false;
 
+  bool get _esOtro => _tramite?.personalizado ?? false;
+
+  /// Valor que se cobra: el escrito por la persona en "Otro", o la tarifa del trámite.
+  num get _valorFinal =>
+      _esOtro ? (int.tryParse(_valorOtro.text.trim()) ?? 0) : (_tramite?.valor ?? 0);
+
+  String get _nombreFinal => _esOtro ? _tituloOtro.text.trim() : (_tramite?.nombre ?? '—');
+
   @override
   void dispose() {
-    for (final c in [_descripcion, _notas, _recogida, _recogidaRef, _entrega, _entregaRef]) {
+    for (final c in [
+      _tituloOtro,
+      _valorOtro,
+      _descripcion,
+      _notas,
+      _recogida,
+      _recogidaRef,
+      _entrega,
+      _entregaRef,
+    ]) {
       c.dispose();
     }
     super.dispose();
+  }
+
+  String? _validarValorOtro(String? v) {
+    final n = int.tryParse((v ?? '').trim());
+    if (n == null) return 'Escribe el valor en pesos';
+    if (n < _minOtro) return 'El valor mínimo es ${formatCop(_minOtro)}';
+    if (n > _maxOtro) return 'El valor máximo es ${formatCop(_maxOtro)}';
+    return null;
   }
 
   /// Abre el mapa para elegir la dirección y rellena el campo de texto.
@@ -78,7 +112,8 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
     });
   }
 
-  /// HU07: al llegar con un trámite del catálogo se salta directo al detalle.
+  /// HU07: al llegar con un trámite del catálogo se salta directo al detalle
+  /// (salvo "Otro", que primero pide el servicio y el valor).
   void _aplicarPreseleccion(List<Tramite> lista) {
     if (_preseleccionado) return;
     _preseleccionado = true;
@@ -87,7 +122,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
     final t = lista.where((x) => x.id == id).firstOrNull;
     if (t != null) {
       _tramite = t;
-      _paso = 1;
+      _paso = t.personalizado ? 0 : 1;
     }
   }
 
@@ -107,6 +142,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
           mostrarMensaje(context, 'Selecciona un tipo de trámite', error: true);
           return;
         }
+        if (_esOtro && !(_formOtro.currentState?.validate() ?? false)) return;
       case 1:
         if (!_formDetalle.currentState!.validate()) return;
       case 2:
@@ -154,6 +190,8 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
         entregaDireccion: _entrega.text,
         entregaReferencia: _entregaRef.text,
         idempotencyKey: _idempotencyKey,
+        titulo: _esOtro ? _tituloOtro.text.trim() : null,
+        valor: _esOtro ? _valorFinal : null,
       );
       // Las ubicaciones del mapa son opcionales: si fallan, el pedido sigue adelante.
       final a = _recogidaPunto;
@@ -163,8 +201,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
           await ref.read(mapsRepositoryProvider).guardarCoordenadas(pedidoId, a, b);
         } catch (_) {}
       }
-      // SANDBOX: sustituir por el checkout de Wompi cuando se conecte la pasarela.
-      await repo.simularPago(pedidoId);
+      
       ref.invalidate(pedidosProvider);
       if (!mounted) return;
       mostrarMensaje(context, 'Pedido confirmado. Estamos buscando un ayudante');
@@ -227,9 +264,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
                                   width: 22,
                                   child: CircularProgressIndicator(strokeWidth: 2.5),
                                 )
-                              : Text(
-                                  'Confirmar y pagar ${formatCop(_tramite?.valor ?? 0)}',
-                                ),
+                              : const Text('Confirmar pedido'),
                         ),
                 ),
               ],
@@ -248,7 +283,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
         Text('¿Qué necesitas que hagamos por ti?',
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 14),
-        for (final t in lista)
+        for (final t in lista) ...[
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: AppCard(
@@ -258,7 +293,10 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
                   Icon(t.iconData, color: kBrand),
                   const SizedBox(width: 12),
                   Expanded(child: Text(t.nombre)),
-                  if (t.valor != null)
+                  if (t.personalizado)
+                    Text('Tú eliges el valor',
+                        style: Theme.of(context).textTheme.labelMedium)
+                  else if (t.valor != null)
                     Text(formatCop(t.valor!), style: Theme.of(context).textTheme.labelMedium),
                   const SizedBox(width: 8),
                   Icon(
@@ -269,7 +307,50 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
               ),
             ),
           ),
+          if (t.personalizado && _tramite?.id == t.id) _camposOtro(),
+        ],
       ],
+    );
+  }
+
+  /// Campos de "Otro": qué servicio quiere y cuánto ofrece pagar.
+  Widget _camposOtro() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Form(
+        key: _formOtro,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextFormField(
+              controller: _tituloOtro,
+              maxLength: 60,
+              textCapitalization: TextCapitalization.sentences,
+              textInputAction: TextInputAction.next,
+              onChanged: (_) => setState(() {}),
+              validator: (v) =>
+                  Validators.largo(v, campo: 'El servicio', min: 3, max: 60),
+              decoration: const InputDecoration(
+                labelText: '¿Qué servicio necesitas?',
+                hintText: 'Ej: Comprar un regalo, hacer una fila…',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _valorOtro,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onChanged: (_) => setState(() {}),
+              validator: _validarValorOtro,
+              decoration: InputDecoration(
+                labelText: 'Valor que ofreces (COP)',
+                prefixText: r'$ ',
+                helperText: 'Mínimo ${formatCop(_minOtro)}',
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -384,7 +465,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
 
   // ---- Paso 4: resumen, costo y seguro (HU14, HU15) ----
   Widget _pasoResumen() {
-    final valor = _tramite?.valor ?? 0;
+    final valor = _valorFinal;
 
     Widget fila(String etiqueta, String texto) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
@@ -403,7 +484,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
         AppCard(
           child: Column(
             children: [
-              fila('Trámite', _tramite?.nombre ?? '—'),
+              fila('Trámite', _nombreFinal),
               fila('Descripción', _descripcion.text.trim()),
               if (_notas.text.trim().isNotEmpty) fila('Notas', _notas.text.trim()),
               const Divider(),
@@ -443,7 +524,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Total a pagar',
+                  const Text('Pagas al ayudante',
                       style: TextStyle(fontWeight: FontWeight.w700)),
                   Text(formatCop(valor),
                       style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
@@ -454,7 +535,8 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
         ),
         const SizedBox(height: 12),
         Text(
-          'Modo de pruebas: no se realiza ningún cobro real.',
+          'Pagas el servicio directamente al ayudante (efectivo, transferencia o Nequi). '
+          'TrámitesYa no cobra ni retiene este dinero.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodySmall,
         ),

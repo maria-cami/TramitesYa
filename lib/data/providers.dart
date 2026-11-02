@@ -68,3 +68,13 @@ final estadoPedidoEnVivoProvider = StreamProvider.autoDispose.family<String, Str
 final nombreAyudanteProvider = FutureProvider.autoDispose.family<String?, String>(
   (ref, pedidoId) => ref.watch(appRepositoryProvider).nombreAyudante(pedidoId),
 );
+
+// ---- Planes ----
+final miPlanProvider = FutureProvider.autoDispose<EstadoPlan>(
+  (ref) => ref.watch(appRepositoryProvider).miPlan(),
+);
+
+final planesProvider = FutureProvider.autoDispose<List<Plan>>((ref) async {
+  final perfil = await ref.watch(perfilProvider.future);
+  return ref.watch(appRepositoryProvider).planes(perfil['role'] as String);
+});

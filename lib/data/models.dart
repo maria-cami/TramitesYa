@@ -8,6 +8,7 @@ class Tramite {
     this.categoria,
     this.icono,
     this.valor,
+    this.personalizado = false,
   });
 
   final String id;
@@ -15,6 +16,9 @@ class Tramite {
   final String? categoria;
   final String? icono;
   final num? valor;
+
+  /// true = "Otro": la persona escribe el servicio y el valor.
+  final bool personalizado;
 
   factory Tramite.fromJson(Map<String, dynamic> j) {
     final ahora = DateTime.now();
@@ -28,6 +32,7 @@ class Tramite {
       nombre: j['nombre'] as String,
       categoria: j['categoria'] as String?,
       icono: j['icono'] as String?,
+      personalizado: (j['personalizado'] ?? false) as bool,
       valor: tarifas.isEmpty ? null : num.parse(tarifas.first['valor'].toString()),
     );
   }
@@ -112,6 +117,8 @@ class Pedido {
   final String descripcion;
   final String? notas;
   final String tramiteNombre;
+
+  /// Valor del servicio: lo que el usuario le paga directamente al ayudante.
   final num valor;
   final String recogidaDireccion;
   final String? recogidaReferencia;
@@ -121,8 +128,8 @@ class Pedido {
   final String? ayudanteId;
   final DateTime createdAt;
 
-  /// Lo que gana el ayudante: 80 % de la tarifa (el 20 % es la comisión de ejemplo).
-  num get pagoAyudante => (valor * 0.8).round();
+  /// Ya no se usa: el ayudante cobra el valor completo (la app no retiene dinero).
+  num get pagoAyudante => valor;
 
   /// Consulta con embeds: `*, catalogo_tramites(nombre), tarifas(valor)`.
   static const select = '*, catalogo_tramites(nombre), tarifas(valor)';
@@ -136,7 +143,9 @@ class Pedido {
       estado: j['estado'] as String,
       descripcion: j['descripcion'] as String,
       notas: j['notas'] as String?,
-      tramiteNombre: (tramite?['nombre'] as String?) ?? 'Trámite',
+      tramiteNombre: (j['titulo_personalizado'] as String?) ??
+          (tramite?['nombre'] as String?) ??
+          'Trámite',
       valor: num.parse((tarifa?['valor'] ?? 0).toString()),
       recogidaDireccion: j['recogida_direccion'] as String,
       recogidaReferencia: j['recogida_referencia'] as String?,
@@ -222,4 +231,65 @@ class Movimiento {
         'pago_ayudante' => 'Pago por servicio',
         _ => tipo,
       };
+}
+
+/// Un plan mensual (tabla `planes`).
+class Plan {
+  const Plan({
+    required this.id,
+    required this.nombre,
+    required this.descripcion,
+    required this.precio,
+    this.pedidosMes,
+  });
+
+  final String id;
+  final String nombre;
+  final String descripcion;
+  final num precio;
+
+  /// null = ilimitado.
+  final int? pedidosMes;
+
+  factory Plan.fromJson(Map<String, dynamic> j) => Plan(
+        id: j['id'] as String,
+        nombre: j['nombre'] as String,
+        descripcion: (j['descripcion'] ?? '') as String,
+        precio: num.parse('${j['precio']}'),
+        pedidosMes: j['pedidos_mes'] == null ? null : int.parse('${j['pedidos_mes']}'),
+      );
+}
+
+/// Plan vigente de la persona y su uso del mes (función mi_plan()).
+class EstadoPlan {
+  const EstadoPlan({
+    required this.rol,
+    required this.planId,
+    required this.nombre,
+    required this.activo,
+    required this.prueba,
+    this.vence,
+    this.pedidosLimite,
+    this.pedidosUsados = 0,
+  });
+
+  final String rol;
+  final String? planId;
+  final String? nombre;
+  final bool activo;
+  final bool prueba;
+  final DateTime? vence;
+  final int? pedidosLimite;
+  final int pedidosUsados;
+
+  factory EstadoPlan.fromJson(Map<String, dynamic> j) => EstadoPlan(
+        rol: (j['rol'] ?? '') as String,
+        planId: j['plan_id'] as String?,
+        nombre: j['nombre'] as String?,
+        activo: (j['activo'] ?? false) as bool,
+        prueba: (j['prueba'] ?? false) as bool,
+        vence: j['vence'] == null ? null : DateTime.parse(j['vence'] as String).toLocal(),
+        pedidosLimite: j['pedidos_limite'] == null ? null : int.parse('${j['pedidos_limite']}'),
+        pedidosUsados: int.parse('${j['pedidos_usados'] ?? 0}'),
+      );
 }

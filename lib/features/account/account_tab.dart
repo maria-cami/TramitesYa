@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/format.dart';
 import '../../core/theme.dart';
-import '../../core/widgets.dart';
-import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../auth/mfa_setup_screen.dart';
+import 'plan_screen.dart';
 
-/// Perfil, saldo de la billetera (HU31), movimientos y cierre de sesión (HU05).
-/// Recargar saldo (HU32) queda para cuando se conecte la pasarela de pagos.
+/// Perfil, plan mensual, seguridad y cierre de sesión (HU05).
 class AccountTab extends ConsumerWidget {
   const AccountTab({super.key});
 
@@ -40,8 +37,6 @@ class AccountTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final perfil = ref.watch(perfilProvider);
-    final saldo = ref.watch(saldoProvider);
-    final movimientos = ref.watch(movimientosProvider);
     final email = ref.watch(supabaseProvider).auth.currentUser?.email ?? '';
     final textos = Theme.of(context).textTheme;
 
@@ -49,9 +44,8 @@ class AccountTab extends ConsumerWidget {
       onRefresh: () async {
         ref
           ..invalidate(perfilProvider)
-          ..invalidate(saldoProvider)
-          ..invalidate(movimientosProvider);
-        await ref.read(saldoProvider.future);
+          ..invalidate(miPlanProvider);
+        await ref.read(perfilProvider.future);
       },
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -101,78 +95,24 @@ class AccountTab extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Mi billetera',
+                Text('Mi plan',
                     style: textos.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 10),
-                AppCard(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Saldo disponible', style: textos.bodySmall),
-                      const SizedBox(height: 4),
-                      Text(
-                        saldo.when(
-                          data: formatCop,
-                          loading: () => '…',
-                          error: (_, __) => 'No disponible',
-                        ),
-                        style: const TextStyle(
-                          color: kBrand,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                const PlanResumenCard(),
                 const SizedBox(height: 20),
                 Text('Seguridad',
                     style: textos.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 10),
                 const _DosPasosTile(),
-                const SizedBox(height: 20),
-          Text('Movimientos recientes',
-              style: textos.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 10),
-          movimientos.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (_, __) => SizedBox(
-              height: 180,
-              child: ErrorReintentar(
-                onReintentar: () => ref.invalidate(movimientosProvider),
-              ),
-            ),
-            data: (lista) => lista.isEmpty
-                ? const SizedBox(
-                    height: 160,
-                    child: EstadoVacio(
-                      icono: Icons.account_balance_wallet_outlined,
-                      texto: 'Aún no tienes movimientos.',
-                    ),
-                  )
-                : Column(
-                    children: [
-                      for (final m in lista)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _MovimientoTile(m),
-                        ),
-                    ],
+                const SizedBox(height: 24),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
                   ),
-          ),
-          const SizedBox(height: 20),
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
-            ),
-            onPressed: () => _cerrarSesion(context, ref),
-            icon: const Icon(Icons.logout),
-            label: const Text('Cerrar sesión'),
-          ),
+                  onPressed: () => _cerrarSesion(context, ref),
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Cerrar sesión'),
+                ),
               ],
             ),
           ),
@@ -217,48 +157,6 @@ class _DosPasosTile extends ConsumerWidget {
               ),
               child: const Text('Activar'),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MovimientoTile extends StatelessWidget {
-  const _MovimientoTile(this.m);
-
-  final Movimiento m;
-
-  @override
-  Widget build(BuildContext context) {
-    final textos = Theme.of(context).textTheme;
-    final estado = switch (m.estado) {
-      'completed' => ('Completado', const Color(0xFF159A63)),
-      'refunded' => ('Reembolsado', const Color(0xFFB7791F)),
-      'failed' => ('Fallido', const Color(0xFFD64545)),
-      _ => ('Pendiente', const Color(0xFF6B6B80)),
-    };
-    return AppCard(
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(m.etiqueta,
-                    style: textos.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                Text(formatFecha(m.createdAt), style: textos.bodySmall),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(formatCop(m.monto),
-                  style: textos.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              EstadoChip(etiqueta: estado.$1, color: estado.$2),
-            ],
-          ),
         ],
       ),
     );

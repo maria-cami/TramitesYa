@@ -51,7 +51,7 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      primerNombre.isEmpty ? 'Hola 👋' : 'Hola, $primerNombre 👋',
+                      primerNombre.isEmpty ? 'Hola' : 'Hola, $primerNombre',
                       style: textos.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 4),

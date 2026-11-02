@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/widgets.dart';
 import '../../data/providers.dart';
+import '../admin/admin_shell.dart';
 import '../helper/helper_shell.dart';
 import 'home_shell.dart';
 
-/// Decide qué app ver según el rol del perfil: ayudante → HelperShell; el resto → HomeShell.
+/// Decide qué app ver según el rol del perfil:
+/// admin → AdminShell · ayudante → HelperShell · el resto → HomeShell.
 /// El rol lo fija el servidor (profiles.role); la app solo lo lee.
 class RoleGate extends ConsumerWidget {
   const RoleGate({super.key});
@@ -17,7 +19,11 @@ class RoleGate extends ConsumerWidget {
     final datos = perfil.valueOrNull;
 
     if (datos != null) {
-      return datos['role'] == 'ayudante' ? const HelperShell() : const HomeShell();
+      return switch (datos['role']) {
+        'admin' => const AdminShell(),
+        'ayudante' => const HelperShell(),
+        _ => const HomeShell(),
+      };
     }
     if (perfil.hasError) {
       return Scaffold(

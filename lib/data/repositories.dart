@@ -251,7 +251,7 @@ class AppRepository {
   Future<List<Tramite>> tramites() async {
     final res = await _client
         .from('catalogo_tramites')
-        .select('id, nombre, categoria, icono, tarifas(valor, vigente_desde)')
+        .select('id, nombre, categoria, icono, personalizado, tarifas(valor, vigente_desde)')
         .eq('activo', true)
         .order('nombre');
     return res.map<Tramite>(Tramite.fromJson).toList();
@@ -278,7 +278,7 @@ class AppRepository {
 
   /// HU16: crea el pedido y la transacción pendiente. Reintentar con la misma
   /// [idempotencyKey] devuelve el mismo pedido (no cobra dos veces).
-  Future<String> crearPedido({
+    Future<String> crearPedido({
     required String tramiteId,
     required String descripcion,
     String? notas,
@@ -287,6 +287,8 @@ class AppRepository {
     required String entregaDireccion,
     String? entregaReferencia,
     required String idempotencyKey,
+    String? titulo,
+    num? valor,
   }) async {
     try {
       final res = await _client.rpc('crear_pedido', params: {
@@ -298,6 +300,8 @@ class AppRepository {
         'p_entrega_direccion': entregaDireccion,
         'p_entrega_referencia': entregaReferencia,
         'p_idempotency_key': idempotencyKey,
+        'p_titulo': titulo,
+        'p_valor': valor,
       });
       return (res as Map<String, dynamic>)['id'] as String;
     } on PostgrestException catch (e) {
@@ -419,6 +423,39 @@ class AppRepository {
 
   /// Los mensajes que lanzamos con `raise exception` en SQL son aptos para el
   /// usuario; cualquier otro error de Postgres se oculta tras un mensaje genérico.
+    // ---- Planes ----
+  Future<EstadoPlan> miPlan() async {
+    try {
+      final res = await _client.rpc('mi_plan');
+      return EstadoPlan.fromJson(Map<String, dynamic>.from(res as Map));
+    } on PostgrestException catch (e) {
+      throw AppException(_mensajeDb(e));
+    }
+  }
+
+  Future<List<Plan>> planes(String rol) async {
+    try {
+      final res = await _client
+          .from('planes')
+          .select()
+          .eq('rol', rol)
+          .eq('activo', true)
+          .order('orden');
+      return res.map<Plan>(Plan.fromJson).toList();
+    } on PostgrestException catch (e) {
+      throw AppException(_mensajeDb(e));
+    }
+  }
+
+  /// SOLO SANDBOX: activa el plan 30 días sin cobrar. Se reemplaza por la pasarela.
+  Future<void> activarPlan(String planId) async {
+    try {
+      await _client.rpc('activar_plan_simulado', params: {'p_plan_id': planId});
+    } on PostgrestException catch (e) {
+      throw AppException(_mensajeDb(e));
+    }
+  }
+  
   String _mensajeDb(PostgrestException e) {
     if (e.code == 'P0001') return e.message;
     return 'No se pudo completar la operación. Inténtalo de nuevo';

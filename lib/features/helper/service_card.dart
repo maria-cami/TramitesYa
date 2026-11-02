@@ -6,12 +6,21 @@ import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/models.dart';
 
-/// Tarjeta de un pedido en las listas del ayudante.
+/// Tarjeta de un pedido en las listas del ayudante. Si recibe [onAceptar],
+/// muestra el botón azul "Aceptar" como en el mockup.
 class ServiceCard extends StatelessWidget {
-  const ServiceCard({super.key, required this.pedido, this.mostrarEstado = false});
+  const ServiceCard({
+    super.key,
+    required this.pedido,
+    this.mostrarEstado = false,
+    this.onAceptar,
+    this.aceptando = false,
+  });
 
   final Pedido pedido;
   final bool mostrarEstado;
+  final VoidCallback? onAceptar;
+  final bool aceptando;
 
   @override
   Widget build(BuildContext context) {
@@ -42,14 +51,38 @@ class ServiceCard extends StatelessWidget {
           _Linea(Icons.north_east, 'Recogida', pedido.recogidaDireccion),
           const SizedBox(height: 4),
           _Linea(Icons.south_west, 'Entrega', pedido.entregaDireccion),
-          const SizedBox(height: 10),
-          Text(
-            'Ganas ${formatCop(pedido.pagoAyudante)}',
-            style: const TextStyle(
-              color: Color(0xFF159A63),
-              fontWeight: FontWeight.w800,
-              fontSize: 16,
-            ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                'Valor ${formatCop(pedido.valor)}',
+                  style: const TextStyle(
+                    color: kNavy,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              if (onAceptar != null)
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: kAzul,
+                    minimumSize: const Size(96, 40),
+                  ),
+                  onPressed: aceptando ? null : onAceptar,
+                  child: aceptando
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Aceptar'),
+                ),
+            ],
           ),
         ],
       ),
@@ -69,7 +102,7 @@ class _Linea extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icono, size: 16, color: kBrand),
+        Icon(icono, size: 16, color: kAzul),
         const SizedBox(width: 6),
         Expanded(
           child: Text.rich(
@@ -79,7 +112,7 @@ class _Linea extends StatelessWidget {
                   text: '$etiqueta: ',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
-                TextSpan(text: texto),
+                TextSpan(text: texto, style: const TextStyle(color: kGris)),
               ],
             ),
             maxLines: 2,

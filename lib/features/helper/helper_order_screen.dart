@@ -6,6 +6,7 @@ import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/models.dart';
 import '../../data/providers.dart';
+import '../maps/route_map.dart';
 
 /// Detalle de un servicio para el ayudante, con la acción que corresponde a su estado:
 /// disponible → Aceptar · asignado → Recogido / Soltar · recogido → Entregado.
@@ -32,9 +33,7 @@ class _HelperOrderScreenState extends ConsumerState<HelperOrderScreen> {
       ref
         ..invalidate(servicioProvider(widget.pedidoId))
         ..invalidate(disponiblesProvider)
-        ..invalidate(misServiciosProvider)
-        ..invalidate(saldoProvider)
-        ..invalidate(movimientosProvider);
+        ..invalidate(misServiciosProvider);
       if (!mounted) return;
       mostrarMensaje(context, exito);
       if (volver) Navigator.of(context).pop();
@@ -84,6 +83,7 @@ class _HelperOrderScreenState extends ConsumerState<HelperOrderScreen> {
   Widget build(BuildContext context) {
     final servicio = ref.watch(servicioProvider(widget.pedidoId));
     final repo = ref.read(appRepositoryProvider);
+    final textos = Theme.of(context).textTheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -109,50 +109,73 @@ class _HelperOrderScreenState extends ConsumerState<HelperOrderScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    p.codigo,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
                   EstadoChip(
                     etiqueta: EstadoPedido.etiqueta(p.estado),
                     color: EstadoPedido.color(p.estado),
                   ),
+                  Text(p.codigo, style: textos.bodySmall),
                 ],
               ),
+              const SizedBox(height: 12),
+              Text(
+                p.tramiteNombre,
+                style: textos.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                formatCop(p.valor),
+                style: const TextStyle(
+                  color: kNavy,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 26,
+                ),
+              ),
+              Text('Cobras directamente al usuario', style: textos.bodySmall),
               const SizedBox(height: 16),
               AppCard(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _Fila('Trámite', p.tramiteNombre),
-                    _Fila('Qué hay que hacer', p.descripcion),
-                    if (p.notas != null) _Fila('Notas', p.notas!),
-                    const Divider(),
-                    _Fila('Recogida', _dir(p.recogidaDireccion, p.recogidaReferencia)),
-                    _Fila('Entrega', _dir(p.entregaDireccion, p.entregaReferencia)),
+                    _Punto(
+                      icono: Icons.north_east,
+                      titulo: 'Recogida',
+                      texto: _dir(p.recogidaDireccion, p.recogidaReferencia),
+                    ),
+                    const Divider(height: 24),
+                    _Punto(
+                      icono: Icons.south_west,
+                      titulo: 'Entrega',
+                      texto: _dir(p.entregaDireccion, p.entregaReferencia),
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 12),
               AppCard(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Ganas por este servicio'),
                     Text(
-                      formatCop(p.pagoAyudante),
-                      style: const TextStyle(
-                        color: Color(0xFF159A63),
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
-                      ),
+                      'Instrucciones',
+                      style: textos.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                     ),
+                    const SizedBox(height: 6),
+                    Text(p.descripcion),
+                    if (p.notas != null && p.notas!.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text('Notas: ${p.notas}', style: textos.bodySmall),
+                    ],
                   ],
                 ),
               ),
+              // Mapa con recogida y entrega (solo si el pedido tiene ubicaciones guardadas).
+              const SizedBox(height: 12),
+              RutaPedidoMapa(pedidoId: widget.pedidoId),
+              if (p.estado == EstadoPedido.asignado ||
+                  p.estado == EstadoPedido.recogido ||
+                  p.estado == EstadoPedido.entregado) ...[
+                const SizedBox(height: 12),
+                _Progreso(p.estado),
+              ],
               const SizedBox(height: 20),
               if (p.estado == EstadoPedido.buscandoAyudante)
                 FilledButton(
@@ -162,7 +185,7 @@ class _HelperOrderScreenState extends ConsumerState<HelperOrderScreen> {
                             () => repo.aceptarPedido(p.id),
                             'Pedido aceptado. ¡Manos a la obra!',
                           ),
-                  child: _ocupado ? const _Cargando() : const Text('Aceptar pedido'),
+                  child: _ocupado ? const _Cargando() : const Text('Aceptar servicio'),
                 ),
               if (p.estado == EstadoPedido.asignado) ...[
                 FilledButton(
@@ -186,20 +209,20 @@ class _HelperOrderScreenState extends ConsumerState<HelperOrderScreen> {
                       ? null
                       : () => _ejecutar(
                             () => repo.marcarEntregado(p.id),
-                            'Entregado. Tu pago ya está en tu billetera',
+                            'Servicio finalizado',
                           ),
-                  child: _ocupado ? const _Cargando() : const Text('Marcar como entregado'),
+                  child: _ocupado ? const _Cargando() : const Text('Finalizar servicio'),
                 ),
               if (p.estado == EstadoPedido.entregado)
                 const _Aviso(
                   icono: Icons.check_circle,
-                  color: Color(0xFF159A63),
-                  texto: 'Servicio completado. El pago ya se acreditó en tu billetera.',
+                  color: kVerde,
+                  texto: 'Servicio completado.',
                 ),
               if (p.estado == EstadoPedido.cancelado)
                 const _Aviso(
                   icono: Icons.cancel_outlined,
-                  color: Color(0xFFD64545),
+                  color: kError,
                   texto: 'Este pedido fue cancelado.',
                 ),
             ],
@@ -211,6 +234,85 @@ class _HelperOrderScreenState extends ConsumerState<HelperOrderScreen> {
 
   String _dir(String direccion, String? referencia) =>
       (referencia == null || referencia.isEmpty) ? direccion : '$direccion ($referencia)';
+}
+
+/// Línea de tiempo del servicio: Aceptado → Recogida realizada → Entrega finalizada.
+class _Progreso extends StatelessWidget {
+  const _Progreso(this.estado);
+
+  final String estado;
+
+  static const _pasos = ['Aceptado', 'Recogida realizada', 'Entrega finalizada'];
+
+  @override
+  Widget build(BuildContext context) {
+    final actual = switch (estado) {
+      EstadoPedido.asignado => 0,
+      EstadoPedido.recogido => 1,
+      EstadoPedido.entregado => 2,
+      _ => -1,
+    };
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < _pasos.length; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: [
+                  Icon(
+                    i <= actual ? Icons.check_circle : Icons.radio_button_unchecked,
+                    color: i <= actual ? kAzul : kBorde,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    _pasos[i],
+                    style: TextStyle(
+                      fontWeight: i == actual ? FontWeight.w700 : FontWeight.w500,
+                      color: i <= actual ? kNavy : kGris,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Punto extends StatelessWidget {
+  const _Punto({required this.icono, required this.titulo, required this.texto});
+
+  final IconData icono;
+  final String titulo;
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) {
+    final textos = Theme.of(context).textTheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        IconoTile(icono, size: 36),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                titulo,
+                style: textos.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              Text(texto, style: textos.bodyMedium?.copyWith(color: kGris)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _Cargando extends StatelessWidget {
@@ -244,30 +346,6 @@ class _Aviso extends StatelessWidget {
           Icon(icono, color: color),
           const SizedBox(width: 10),
           Expanded(child: Text(texto)),
-        ],
-      ),
-    );
-  }
-}
-
-class _Fila extends StatelessWidget {
-  const _Fila(this.etiqueta, this.valor);
-
-  final String etiqueta;
-  final String valor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 112,
-            child: Text(etiqueta, style: Theme.of(context).textTheme.bodySmall),
-          ),
-          Expanded(child: Text(valor)),
         ],
       ),
     );

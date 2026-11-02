@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../account/account_tab.dart';
 import 'available_tab.dart';
+import 'earnings_tab.dart';
 import 'my_jobs_tab.dart';
 
-/// Contenedor del ayudante: Disponibles · Mis servicios · Cuenta (saldo y cierre de sesión).
+/// Contenedor del ayudante: Inicio · Servicios · Ganancias · Perfil.
 class HelperShell extends StatefulWidget {
   const HelperShell({super.key});
 
@@ -21,7 +22,7 @@ class _HelperShellState extends State<HelperShell> {
       body: SafeArea(
         child: IndexedStack(
           index: _indice,
-          children: const [AvailableTab(), MyJobsTab(), AccountTab()],
+          children: const [AvailableTab(), MyJobsTab(), EarningsTab(), AccountTab()],
         ),
       ),
       bottomNavigationBar: NavigationBar(
@@ -29,19 +30,24 @@ class _HelperShellState extends State<HelperShell> {
         onDestinationSelected: (i) => setState(() => _indice = i),
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.search),
-            selectedIcon: Icon(Icons.search),
-            label: 'Disponibles',
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Inicio',
           ),
           NavigationDestination(
             icon: Icon(Icons.assignment_outlined),
             selectedIcon: Icon(Icons.assignment),
-            label: 'Mis servicios',
+            label: 'Servicios',
+          ),
+           NavigationDestination(
+            icon: Icon(Icons.insights_outlined),
+            selectedIcon: Icon(Icons.insights),
+            label: 'Resumen',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline),
             selectedIcon: Icon(Icons.person),
-            label: 'Cuenta',
+            label: 'Perfil',
           ),
         ],
       ),
